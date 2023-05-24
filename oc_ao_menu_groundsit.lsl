@@ -1,251 +1,80 @@
-//integer CMD_ZERO            = 0;
-integer CMD_OWNER           = 500;
-//integer CMD_TRUSTED         = 501;
-//integer CMD_GROUP           = 502;
-integer CMD_WEARER          = 503;
-//integer CMD_EVERYONE        = 504;
-//integer CMD_BLOCKED         = 598; // <--- Used in auth_request, will not return on a CMD_ZERO
-//integer CMD_RLV_RELAY       = 507;
-//integer CMD_SAFEWORD        = 510;
-//integer CMD_RELAY_SAFEWORD  = 511;
-//integer CMD_NOACCESS        = 599;
+/*
+    A minimal re write of the AO System to use Linkset Data
+    this script is intended to be a stand alone ao managed from linkset storage
+    which would allow it to be populated by any interface script.
+    Created: Febuary 5 2023
+    By: Phidoux (taya.Maruti)
+    ------------------------------------
+    | Contributers  and updates below  |
+    ------------------------------------
+    | Name | Date | comment            |
+    ------------------------------------
+*/
 
-//integer g_iMenuStride;
-integer g_iPage = 0;
-integer g_iNumberOfPages;
-//integer g_iGroundSitTime = 120; // Default GroundSit timer.
+// Load note cards and set aniamtin states
 
-string UPMENU = "BACK";
-//string b_sGroundSitLoop;
-string b_sGroundSitRand;
-list g_lCheckBoxes = ["▢","▣"];
-//
+integer g_iCardLine = 0;
+
+key g_kCard;
+
+list g_lAnimStates = [ //http://wiki.secondlife.com/wiki/LlSetAnimationOverride
+    "Crouching","CrouchWalking","Falling Down","Flying","FlyingSlow",
+    "Hovering","Hovering Down","Hovering Up","Jumping","Landing",
+    "PreJumping","Running","Standing","Sitting","Sitting on Ground","Standing Up",
+    "Striding","Soft Landing","Taking Off","Turning Left","Turning Right","Walking"
+];
+
+list g_lWingStates = [
+    "Wings Crouching","Wings CrouchWalking","Wings Falling Down","Wings Flying","Wings FlyingSlow",
+    "Wings Hovering","Wings Hovering Down","Wings Hovering Up","WingsJumping","Wings Landing",
+    "Wings PreJumping","Wings Running","Wings Standing","Wings Sitting","Wings Sitting on Ground","Wings Standing Up",
+    "Wings Striding","Wings Soft Landing","Wings Taking Off","Wings Turning Left","Wings Turning Right","Wings Walking"
+];
+
+list g_lTailStates = [
+    "Tail Crouching","Tail CrouchWalking","Tail Falling Down","Tail Flying","Tail FlyingSlow",
+    "Tail Hovering","Tail Hovering Down","Tail Hovering Up","TailJumping","Tail Landing",
+    "Tail PreJumping","Tail Running","Tail Standing","Tail Sitting","Tail Sitting on Ground","Tail Standing Up",
+    "Tail Striding","Tail Soft Landing","Tail Taking Off","Tail Turning Left","Tail Turning Right","Tail Walking"
+];
+
+
+list g_lSwimStates = ["Swim Forward","Swim Hover","Swim Slow","Swim Up","Swim Down"];
+
+sanitation()
+{
+    integer iIndex;
+    for(iIndex = 0; iIndex < (llGetListLength(g_lAnimStates)-1); iIndex++)
+    {
+        string sAnimState = llList2String(g_lAnimStates,iIndex);
+        llLinksetDataDelete(sAnimState);
+        llLinksetDataDelete(llToLower(llLinksetDataRead("addon_name"))+"_"+sAnimState);
+        llLinksetDataDelete("Wings "+sAnimState);
+        llLinksetDataDelete(llToLower(llLinksetDataRead("addon_name"))+"_Wings "+sAnimState);
+        llLinksetDataDelete("Tail "+sAnimState);
+        llLinksetDataDelete(llToLower(llLinksetDataRead("addon_name"))+"_Tail "+sAnimState);
+    }
+    for(iIndex = 0; iIndex < (llGetListLength(g_lSwimStates)-1); iIndex++)
+    {
+        string sAnimState = llList2String(g_lSwimStates,iIndex);
+        llLinksetDataDelete(sAnimState);
+        llLinksetDataDelete(llToLower(llLinksetDataRead("addon_name"))+"_"+sAnimState);
+    }
+}
 
 recordMemory()
 {
     llLinksetDataWrite("memory_"+llGetScriptName(),(string)llGetUsedMemory());
 }
 
-
-
-Dialog(key kID, string sPrompt, list lChoices, list lUtilityButtons, integer iPage, integer iAuth, string sName)
-{
-    list g_lMenuIDs;
-    if(llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_menu") != "")
-    {
-        g_lMenuIDs = llParseString2List(llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_menu"),[","],[]);
-    }
-    integer iChannel = llRound(llFrand(10000000)) + 100000;
-    while (~llListFindList(g_lMenuIDs, [iChannel]))
-    {
-        iChannel = llRound(llFrand(10000000)) + 100000;
-    }
-    integer iListener = llListen(iChannel, "",kID, "");
-    integer iTime = llGetUnixTime() + 180;
-    integer iIndex = llListFindList(g_lMenuIDs, [(string)kID]);
-    if (~iIndex)
-    {
-        llListenRemove(llList2Integer(g_lMenuIDs,2));
-        g_lMenuIDs = llListReplaceList(g_lMenuIDs,[kID, iChannel, iListener, iTime, sName, iAuth],iIndex,iIndex+4);
-    }
-    else
-    {
-        g_lMenuIDs += [kID, iChannel, iListener, iTime, sName, iAuth];
-    }
-    llDialog(kID,sPrompt,SortButtons(lChoices,lUtilityButtons),iChannel);
-    llLinksetDataWrite(llToLower(llLinksetDataRead("addon_name"))+"_menu",llDumpList2String(g_lMenuIDs,","));
-    iPage = 0;
-    g_lMenuIDs = [];
-}
-
-list SortButtons(list lButtons, list lStaticButtons)
-{
-    list lSpacers;
-    list lAllButtons = lButtons + lStaticButtons;
-    //cutting off too many buttons, no multi page menus as of now
-    while (llGetListLength(lAllButtons)>12)
-    {
-        lButtons = llDeleteSubList(lButtons,0,0);
-        lAllButtons = lButtons + lStaticButtons;
-    }
-    while (llGetListLength(lAllButtons) % 3 != 0 && llGetListLength(lAllButtons) < 12)
-    {
-        lSpacers += "-";
-        lAllButtons = lButtons + lSpacers + lStaticButtons;
-    }
-    integer i = llListFindList(lAllButtons, ["BACK"]);
-    if (~i)
-    {
-        lAllButtons = llDeleteSubList(lAllButtons, i, i);
-    }
-    list lOut = llList2List(lAllButtons, 9, 11);
-    lOut += llList2List(lAllButtons, 6, 8);
-    lOut += llList2List(lAllButtons, 3, 5);
-    lOut += llList2List(lAllButtons, 0, 2);
-    if (~i)
-    {
-        lOut = llListInsertList(lOut, ["BACK"], 2);
-    }
-    lAllButtons = [];
-    lButtons = [];
-    lSpacers = [];
-    lStaticButtons = [];
-    return lOut;
-}
-
-Menu(key kID, integer iAuth)
-{
-    string sPrompt = "|=====GroundSits=====|";
-    // load toggle buttons.
-    b_sGroundSitRand = llList2String(g_lCheckBoxes,(integer)llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_gsitrand"))+"Shuffle GroundSit";
-    // set status information.
-    sPrompt +=  "\n Current GroundSit Timer:"+llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_gsitchange")+
-                "\n"+b_sGroundSitRand;
-    // Populate Buttons list.
-    list lButtons  = [];
-    if((integer)llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_gsitchange") > 0)
-    {
-        lButtons = ["GroundSit Time",b_sGroundSitRand];
-    }
-    else
-    {
-        lButtons = ["Select GroundSit","GroundSit Time"];
-    }
-    // Start dialog.
-    Dialog(kID, sPrompt, lButtons, [UPMENU], 0, iAuth, "GroundSits~Main");
-}
-
-MenuGroundSitTime(key kID, integer iAuth)
-{
-    string sPrompt = "|=====GroundSit Time=====|";
-    // load toggle buttons.
-    // set status information.
-    sPrompt +=  "\n Current GroundSit Timer:"+llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_gsitchange")+
-                "\n 0 = Disabled";
-    // Populate Buttons list.
-    list lButtons = [
-        "+1","+5","+10",
-        "-1","-5","-10",
-        "+Custom","-Custom"
-    ];
-    // Start dialog.
-    Dialog(kID, sPrompt, lButtons, ["Disable",UPMENU], 0, iAuth, "GroundSit~Time");
-}
-
+//
 default
 {
     state_entry()
     {
-        if(llGetAttached())
-        {
-            recordMemory();
-            if(llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_menu") != "")
-            {
-                llLinksetDataDelete(llToLower(llLinksetDataRead("addon_name"))+"_menu");
-            }
-            llSetTimerEvent(1);
-        }
+        recordMemory();
     }
-
-    listen(integer iChannel, string sName, key kID, string sMsg)
-    {
-        if (~llListFindList( llParseString2List(llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_menu"),[","],[]),[(string)kID,(string)iChannel]))
-        {
-            list g_lMenuIDs = llParseString2List(llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_menu"),[","],[]);
-            //llOwnerSay(llToLower(llLinksetDataRead("addon_name"))+"_menu"+" Data is\n["+llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_menu")+"]\nand g_lMenuIDs Data is\n["+llDumpList2String(g_lMenuIDs,",")+"]");
-            if(llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_menu") == "")
-            {
-                llOwnerSay("Error Menu is Blank when it should not be!");
-                g_lMenuIDs = [];
-            }
-            integer iMenuIndex = llListFindList(g_lMenuIDs, [(string)kID]);
-            integer iAuth = llList2Integer(g_lMenuIDs,iMenuIndex+5);
-            string sMenu = llList2String(g_lMenuIDs, iMenuIndex+4);
-            llListenRemove(llList2Integer(g_lMenuIDs,iMenuIndex+2));
-            g_lMenuIDs = llDeleteSubList(g_lMenuIDs,iMenuIndex, iMenuIndex+4);
-            llLinksetDataWrite(llToLower(llLinksetDataRead("addon_name"))+"_menu",llDumpList2String(g_lMenuIDs,","));
-            g_lMenuIDs=[];
-            integer iRespring = TRUE;
-            if( sMenu == "GroundSits~Main")
-            {
-                if (sMsg == UPMENU)
-                {
-                    iRespring = FALSE;
-                    llMessageLinked(LINK_SET,iAuth,"MenuAnims",kID);
-                }
-                else if (sMsg == b_sGroundSitRand)
-                {
-                    llLinksetDataWrite(llToLower(llLinksetDataRead("addon_name"))+"_gsitrand",(string)(!(integer)llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_gsitrand")));
-                }
-                else if (sMsg == "GroundSit Time")
-                {
-                    iRespring = FALSE;
-                    MenuGroundSitTime(kID, iAuth);
-                }
-                if(iRespring)
-                {
-                    Menu(kID, iAuth);
-                }
-            }
-            else if( sMenu == "GroundSit~Time")
-            {
-                if (sMsg == UPMENU)
-                {
-                    Menu(kID, iAuth);
-                    iRespring = FALSE;
-                }
-                else if(sMsg == "Disable")
-                {
-                    if((integer)llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_gsitchange"))
-                    {
-                        llLinksetDataWrite(llToLower(llLinksetDataRead("addon_name"))+"_gsitchange",(string)0);
-                    }
-                    else
-                    {
-                        llLinksetDataWrite(llToLower(llLinksetDataRead("addon_name"))+"_gsitchange",(string)120);
-                    }
-                }
-                else if(llGetSubString(sMsg,0,0) == "+")
-                {
-                    sMsg = llDeleteSubString(sMsg,0,0);
-                    llLinksetDataWrite(llToLower(llLinksetDataRead("addon_name"))+"_gsitchange",(string)((integer)llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_gsitchange")+(integer)sMsg));
-                }
-                else if(llGetSubString(sMsg,0,0) == "-")
-                {
-                    sMsg = llDeleteSubString(sMsg,0,0);
-                    if((integer)sMsg > (integer)llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_gsitchange"))
-                    {
-                        llLinksetDataWrite(llToLower(llLinksetDataRead("addon_name"))+"_gsitchange","0");
-                    }
-                    else
-                    {
-                        llLinksetDataWrite(llToLower(llLinksetDataRead("addon_name"))+"_gsitchange",(string)((integer)llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_gsitchange")-(integer)sMsg));
-                    }
-                }
-                if(iRespring)
-                {
-                    MenuGroundSitTime(kID, iAuth);
-                }
-            }
-        }
-    }
-
-    link_message(integer iLink, integer iNum,string sMsg, key kID)
-    {
-        if (iNum <= CMD_WEARER && iNum >= CMD_OWNER)
-        {
-            if(sMsg == "MenuGroundSit")
-            {
-                if(llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_menu") != "")
-                {
-                    llLinksetDataDelete(llToLower(llLinksetDataRead("addon_name"))+"_menu");
-                }
-                Menu(kID,iNum);
-            }
-        }
-    }
-
-    linkset_data(integer iAction,string sName,string sVal)
+    linkset_data(integer iAction, string sName, string sVal)
     {
         if(iAction == LINKSETDATA_UPDATE)
         {
@@ -253,10 +82,146 @@ default
             {
                 recordMemory();
             }
+            else if(sName == llToLower(llLinksetDataRead("addon_name"))+"_card" && sVal != "" && llGetInventoryType(sVal) == INVENTORY_NOTECARD && !(integer)llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_loaded"))
+            {
+                sanitation();
+                llOwnerSay("loading note card "+sVal);
+                llResetTime();
+                g_iCardLine = 0;
+                g_kCard = llGetNotecardLine(sVal,g_iCardLine);
+            }
         }
         else if(iAction == LINKSETDATA_RESET)
         {
             llResetScript();
         }
+    }
+
+    dataserver(key kRequest, string sData)
+    {
+        if (kRequest == g_kCard)
+        {
+            if (sData != EOF)
+            {
+                if (llGetSubString(sData,0,0) != "[")
+                {
+                     jump next;
+                }
+                string sAnimationState = llStringTrim(llGetSubString(sData,1,llSubStringIndex(sData,"]")-1),STRING_TRIM);
+                // Translate common ZHAOII, Oracul and AX anim state values
+                if (sAnimationState == "Stand.1" || sAnimationState == "Stand.2" || sAnimationState == "Stand.3")
+                {
+                    sAnimationState = "Standing";
+                }
+                else if (sAnimationState == "Walk.N")
+                {
+                    sAnimationState = "Walking";
+                }
+                else if (sAnimationState == "Running")
+                {
+                    sAnimationState = "Running";
+                }
+                else if (sAnimationState == "Turn.L")
+                {
+                    sAnimationState = "Turning Left";
+                }
+                else if (sAnimationState == "Turn.R")
+                {
+                    sAnimationState = "Turning Right";
+                }
+                else if (sAnimationState == "Sit.N")
+                {
+                    sAnimationState = "Sitting";
+                }
+                else if (sAnimationState == "Sit.G" || sAnimationState == "Sitting On Ground")
+                {
+                    sAnimationState = "Sitting on Ground";
+                }
+                else if (sAnimationState == "Crouch" || sAnimationState == "Crouching")
+                {
+                    sAnimationState = "Crouching";
+                }
+                else if (sAnimationState == "Walk.C" || sAnimationState == "Crouch Walking")
+                {
+                    sAnimationState = "CrouchWalking";
+                }
+                else if (sAnimationState == "Jump.N" || sAnimationState == "Jumping")
+                {
+                    sAnimationState = "Jumping";
+                }
+                else if (sAnimationState == "Takeoff")
+                {
+                    sAnimationState = "Taking Off";
+                }
+                else if (sAnimationState == "Hover.N")
+                {
+                    sAnimationState = "Hovering";
+                }
+                else if (sAnimationState == "Hover.U" || sAnimationState == "Flying Up")
+                {
+                    sAnimationState = "Hovering Up";
+                }
+                else if (sAnimationState == "Hover.D" || sAnimationState == "Flying Down")
+                {
+                    sAnimationState = "Hovering Down";
+                }
+                else if (sAnimationState == "Fly.N")
+                {
+                    sAnimationState = "Flying";
+                }
+                else if (sAnimationState == "Flying Slow")
+                {
+                    sAnimationState = "FlyingSlow";
+                }
+                else if (sAnimationState == "Land.N")
+                {
+                    sAnimationState = "Landing";
+                }
+                else if (sAnimationState == "Falling")
+                {
+                    sAnimationState = "Falling Down";
+                }
+                else if (sAnimationState == "Jump.P" || sAnimationState == "Pre Jumping")
+                {
+                    sAnimationState = "PreJumping";
+                }
+                else if (sAnimationState == "Stand.U")
+                {
+                    sAnimationState = "Standing Up";
+                }
+                if (!~llListFindList(g_lAnimStates,[sAnimationState]) && !~llListFindList(g_lWingStates,[sAnimationState]) && !~llListFindList(g_lTailStates,[sAnimationState]) && !~llListFindList(g_lSwimStates,[sAnimationState]) && sAnimationState != "Typing")
+                {
+                    jump next;
+                }
+                if (llStringLength(sData)-1 > llSubStringIndex(sData,"]"))
+                {
+                    sData = llGetSubString(sData,llSubStringIndex(sData,"]")+1,-1);
+                    list lTemp = llParseString2List(sData, ["|",","],[]);
+                    string sAnim = sData;
+                    if(~llSubStringIndex(sData,"|") || ~llSubStringIndex(sData,","))
+                    {
+                        llLinksetDataWrite(llToLower(llLinksetDataRead("addon_name"))+"_"+sAnimationState,llDumpList2String(lTemp,","));
+                        sAnim = llList2String(lTemp,0);
+                    }
+                    if(llGetInventoryType(sAnim) == INVENTORY_ANIMATION)
+                    {
+                        llLinksetDataWrite(sAnimationState,sAnim);
+                    }
+                }
+                @next;
+                g_kCard = llGetNotecardLine(llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_card"),++g_iCardLine);
+            }
+            else
+            {
+                llOwnerSay(
+                    "Note Card "+llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_card")+" Loaded into Linkset Data in "+(string)llGetTime()+"s"+
+                    "\nLinksetMemory free: "+(string)llLinksetDataAvailable()+"bytes"
+                );
+
+                llLinksetDataWrite(llToLower(llLinksetDataRead("addon_name"))+"_loaded",(string)TRUE);
+                g_kCard = "";
+            }
+        }
+        recordMemory();
     }
 }
