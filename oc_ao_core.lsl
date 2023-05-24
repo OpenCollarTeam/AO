@@ -51,6 +51,7 @@ SetAO()
         for (i = 0; i<iListLen; i++)
         {
             sAnimState = llList2String(g_lAnimStates,i);
+            llResetAnimationOverride(sAnimState);
             if(~llListFindList(g_lSwimStates,[sAnimState]) && (integer)llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_swiming"))
             {
                 // if swimming convert the use the swim animations for these states.
@@ -93,14 +94,10 @@ SetAO()
             {
                 if((integer)llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_sitctl"))
                 {
-                    llResetAnimationOverride(sAnimState);
-                    llSleep(0.1);
                     llSetAnimationOverride(sAnimState, sAnim);
                 }
                 else if(sAnimState != "Sitting")
                 {
-                    llResetAnimationOverride(sAnimState);
-                    llSleep(0.1);
                     llSetAnimationOverride(sAnimState, sAnim);
                 }
                 iLoaded++;
