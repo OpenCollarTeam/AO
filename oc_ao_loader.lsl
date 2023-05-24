@@ -41,6 +41,27 @@ list g_lTailStates = [
 
 list g_lSwimStates = ["Swim Forward","Swim Hover","Swim Slow","Swim Up","Swim Down"];
 
+sanitation()
+{
+    integer iIndex;
+    for(iIndex = 0; iIndex < (llGetListLength(g_lAnimStates)-1); iIndex++)
+    {
+        string sAnimState = llList2String(g_lAnimStates,iIndex);
+        llLinksetDataDelete(sAnimState);
+        llLinksetDataDelete(llToLower(llLinksetDataRead("addon_name"))+"_"+sAnimState);
+        llLinksetDataDelete("Wings "+sAnimState);
+        llLinksetDataDelete(llToLower(llLinksetDataRead("addon_name"))+"_Wings "+sAnimState);
+        llLinksetDataDelete("Tail "+sAnimState);
+        llLinksetDataDelete(llToLower(llLinksetDataRead("addon_name"))+"_Tail "+sAnimState);
+    }
+    for(iIndex = 0; iIndex < (llGetListLength(g_lSwimStates)-1); iIndex++)
+    {
+        string sAnimState = llList2String(g_lSwimStates,iIndex);
+        llLinksetDataDelete(sAnimState);
+        llLinksetDataDelete(llToLower(llLinksetDataRead("addon_name"))+"_"+sAnimState);
+    }
+}
+
 recordMemory()
 {
     llLinksetDataWrite("memory_"+llGetScriptName(),(string)llGetUsedMemory());
@@ -63,6 +84,7 @@ default
             }
             else if(sName == llToLower(llLinksetDataRead("addon_name"))+"_card" && sVal != "" && llGetInventoryType(sVal) == INVENTORY_NOTECARD && !(integer)llLinksetDataRead(llToLower(llLinksetDataRead("addon_name"))+"_loaded"))
             {
+                sanitation();
                 llOwnerSay("loading note card "+sVal);
                 llResetTime();
                 g_iCardLine = 0;
