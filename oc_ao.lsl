@@ -521,6 +521,12 @@ PermsCheck() {
     }
 }
 
+cleanReset()
+{
+        if (llGetPermissions() & PERMISSION_OVERRIDE_ANIMATIONS) {
+                llResetAnimationOverride("ALL");
+        llResetScript();
+}
 integer API_CHANNEL;
 default {
     state_entry() {
@@ -539,7 +545,7 @@ default {
     }
 
     on_rez(integer iStart) {
-        if (g_kWearer != llGetOwner()) llResetScript();
+        if (g_kWearer != llGetOwner()) cleanReset();
         if (g_iLocked) llOwnerSay("@detach=n");
         g_iReady = FALSE;
         g_kWebLookup = llHTTPRequest("https://raw.githubusercontent.com/OpenCollarTeam/OpenCollar/master/web/ao.txt", [HTTP_METHOD, "GET"],"");
@@ -852,7 +858,7 @@ default {
     changed(integer iChange) {
         if (iChange & CHANGED_COLOR) {
             if (llGetColor(0) != g_vAOoncolor) DetermineColors();
-        } else if (iChange & CHANGED_LINK) llResetScript();
+        } else if (iChange & CHANGED_LINK) cleanReset();
         if (iChange & CHANGED_INVENTORY) PermsCheck();
     }
 }
