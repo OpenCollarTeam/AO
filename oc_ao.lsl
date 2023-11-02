@@ -523,8 +523,7 @@ PermsCheck() {
 
 cleanReset()
 {
-        if (llGetPermissions() & PERMISSION_OVERRIDE_ANIMATIONS) {
-                llResetAnimationOverride("ALL");
+        if (llGetPermissions() & PERMISSION_OVERRIDE_ANIMATIONS) llResetAnimationOverride("ALL");
         llResetScript();
 }
 integer API_CHANNEL;
@@ -833,6 +832,7 @@ default {
                     llOwnerSay("The \""+g_sCard+"\" animation set was loaded successfully.");
                     g_iAO_ON = TRUE;
                 }
+                if (llGetPermissions() & PERMISSION_OVERRIDE_ANIMATIONS) llResetAnimationOverride("ALL");
                 ShowStatus();
                 llRequestPermissions(g_kWearer,PERMISSION_OVERRIDE_ANIMATIONS);
             }
